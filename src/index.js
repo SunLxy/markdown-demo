@@ -44,7 +44,7 @@ const createTemp = (child) => {
   }
 
   child.forEach((item,) => {
-    if (item.type === "code" && item.lang === "jsx") {
+    if (item.type === "code" && ["jsx", "js", "ts", "tsx"].includes(item.lang)) {
       const offfset = item.position.start.offset
       const line = item.position.start.line
       // 查找是否存在老的
@@ -53,11 +53,11 @@ const createTemp = (child) => {
       let filename;
 
       if (oldIndex === -1) {
-        filename = genCodeFileName(mdPath, offfset)
+        filename = genCodeFileName(mdPath, offfset) + `.${item.lang}`
         resultJson.push({
           offset: offfset,
           line: line,
-          filename: `${filename}.js`,
+          filename: `${filename}`,
           path: mdPath,
           value: item.value
         })
@@ -70,7 +70,7 @@ const createTemp = (child) => {
           fs.writeFileSync(`${wr}/${resultJson[oldIndex].filename}`, item.value, { encoding: 'utf-8', flag: 'w+' })
         }
       } else {
-        fs.writeFileSync(`${wr}/${filename}.js`, item.value, { encoding: 'utf-8', flag: 'w+' })
+        fs.writeFileSync(`${wr}/${filename}`, item.value, { encoding: 'utf-8', flag: 'w+' })
       }
     }
   })

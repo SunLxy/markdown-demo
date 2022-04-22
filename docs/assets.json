@@ -2,14 +2,14 @@
   {
     "offset": 7,
     "line": 4,
-    "filename": "7121471099711410710011111911047115114994710910046109100.js",
+    "filename": "7121471099711410710011111911047115114994710910046109100.jsx",
     "path": "/Users/lusun/Study/markdown/src/md.md",
     "value": "export default ()=>{\n  return <div>222</div>\n}"
   },
   {
     "offset": 66,
     "line": 10,
-    "filename": "66121471099711410710011111911047115114994710910046109100.js",
+    "filename": "66121471099711410710011111911047115114994710910046109100.jsx",
     "path": "/Users/lusun/Study/markdown/src/md.md",
     "value": "export default ()=>{\n  return <div>21</div>\n}"
   }
