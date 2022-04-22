@@ -6,8 +6,9 @@ import remarkParse from 'remark-parse';
 
 NodeMonkey()
 
-const md = fs.readFileSync(path.join(process.cwd(), "./src/md.md"))
+const mdPath = path.join(process.cwd(), "./src/md.md")
 
+const md = fs.readFileSync(mdPath)
 const mdStr = md.toString()
 
 const result = unified().use(remarkParse).parse(mdStr)
@@ -45,17 +46,25 @@ const createTemp = (child) => {
   child.forEach((item,) => {
     if (item.type === "code" && item.lang === "jsx") {
       const offfset = item.position.start.offset
-      const oldIndex = resultJson.findIndex(it => it.path === "src/md.md" && it.offset === offfset)
-      const filename = genCodeFileName("src/md.md", offfset)
+      const line = item.position.start.line
+      // 查找是否存在老的
+      const oldIndex = resultJson.findIndex(it => it.path === mdPath && it.offset === offfset && it.line === line)
+      // 生成文件名称
+      let filename;
+
       if (oldIndex === -1) {
+        filename = genCodeFileName(mdPath, offfset)
         resultJson.push({
           offset: offfset,
+          line: line,
           filename: `${filename}.js`,
-          path: "src/md.md",
+          path: mdPath,
           value: item.value
         })
       }
+
       if (oldIndex !== -1) {
+        // 判断内容是否一样，一样不进行更新
         if (resultJson[oldIndex].value !== item.value) {
           resultJson[oldIndex].value = item.value
           fs.writeFileSync(`${wr}/${resultJson[oldIndex].filename}`, item.value, { encoding: 'utf-8', flag: 'w+' })
@@ -65,6 +74,7 @@ const createTemp = (child) => {
       }
     }
   })
+  // 判断新的和老的是否一样，一样不进行生成
   if (pre !== JSON.stringify(resultJson)) {
     fs.writeFileSync(`${wr}/assets.json`, JSON.stringify(resultJson), {
       encoding: 'utf-8', flag: 'w+'
