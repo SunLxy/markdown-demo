@@ -7,7 +7,24 @@ import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import remarkRehype from 'remark-rehype'
 
+import gfm from 'remark-gfm';
+import slug from 'rehype-slug';
+import headings from 'rehype-autolink-headings';
+import rehypeRaw from 'rehype-raw';
+import rehypeAttrs from 'rehype-attr';
+import rehypePrism from 'rehype-prism-plus';
+
 NodeMonkey()
+
+
+const rehypePlugins = [
+  [rehypePrism, { ignoreMissing: true }],
+  rehypeRaw,
+  slug,
+  headings,
+  [rehypeAttrs, { properties: 'attr' }],
+];
+const remarkPlugins = [gfm];
 
 const mdPath = path.join(process.cwd(), "./src/md.md")
 const md = fs.readFileSync(mdPath)
@@ -15,16 +32,18 @@ const mdStr = md.toString()
 
 const processor = unified()
   .use(remarkParse)
-  .use(remarkRehype, { allowDangerousHtml: true })
+  .use(remarkPlugins)
+  .use(remarkRehype, {
+    allowDangerousHtml: true
+  })
+  .use(rehypePlugins || [])
 
 const file = new VFile()
 file.value = mdStr
 const child = processor.parse(file)
 const hastNode = processor.runSync(child, file)
 
-
-
-// jsx  tsx 之类需要展示效果的这种取之间的内容
+// -------------------  jsx  tsx 之类需要展示效果的这种取之间的内容 ----------------
 const getSpace = (
   endIndex,
   child
@@ -57,6 +76,7 @@ const getSpace = (
   };
 };
 
+// --------------  获取忽略的内容   ------------------- 
 const getIgnore = (child) => {
   const ignoreRows = []
   const filesValue = {}
@@ -73,6 +93,7 @@ const getIgnore = (child) => {
       }
       filesValue[line] = {
         ...item,
+        // babel 转换后的 代码，最后需要拼接到结果文件中去的
         transform: "转换的代码",
       }
     }
@@ -82,11 +103,11 @@ const getIgnore = (child) => {
     filesValue,
   }
 }
-
+// ----------------  查询转转换为dom之后的位置   -------------------- 
 const stepTwo = (ignoreRows, child) => {
   return ignoreRows.map((item) => {
-    const findIndexStart = child.findIndex((it) => it.type === "element" && it.position && it.position.start.line === item.start) - 1
-    const findIndexEnd = child.findIndex((it) => it.type === "element" && it.position && it.position.start.line === item.end) - 1
+    const findIndexStart = child.findIndex((it) => it.type === "element" && it.position && it.position.start.line === item.start)
+    const findIndexEnd = child.findIndex((it) => it.type === "element" && it.position && it.position.start.line === item.end)
     return {
       start: findIndexStart,
       end: findIndexEnd,
@@ -96,6 +117,7 @@ const stepTwo = (ignoreRows, child) => {
 
 const Ignore = getIgnore(child.children)
 
+// -------------   判断是否需要展示 ----------------
 const isShowNode = (
   ignoreRows = [],
   index
@@ -115,10 +137,8 @@ const isShowNode = (
 };
 const newIgnore = stepTwo(Ignore.ignoreRows, hastNode.children)
 
-// console.log("hastNode", hastNode)
-// console.log("child", Ignore.ignoreRows )
 
-// 拼接字符串
+// ----------------- 标签属性 拼接字符串  -------------------- 
 const getProperties = (properties) => {
   let str = ''
   Object.entries(properties).forEach(([key, value]) => {
@@ -136,8 +156,49 @@ const getProperties = (properties) => {
   })
   return str
 }
+// ---------------------- 替换 特殊符号 -------------------
+const SymbolMap = new Map([
+  ["{", "&#123;"],
+  ["}", "&#125;"],
+  [">", "&gt;"],
+  ["<", "&lt;"],
+  ["=", "&#61;"],
+  [">=", "&lt;&#61;"],
+  ["<=", "&gt;&#61;"],
+  ["\\", "&#92;"],
+  ["</", "&lt;&#47;"],
+  ["=>", "&#61;&gt;"],
+  ["/>", "&#47;&gt;"],
+])
 
-const createElementStr = (item, ignore, isIgnore = false,) => {
+const transformSymbol = (str) => {
+  if (SymbolMap.get(`${str}`.trim())) {
+    return SymbolMap.get(`${str}`.trim())
+  }
+  return str
+}
+
+const newPreMap = new Map([])
+
+const getPreMapStr = (findEndIndex) => {
+  const { start, end } = newIgnore[findEndIndex]
+  const head = newPreMap.get(start)
+  let desc = ``
+  let i = start
+  while (i < end) {
+    i++;
+    desc += newPreMap.get(i) || ""
+  }
+  return {
+    head,
+    desc
+  }
+
+}
+
+
+// ---------------   拼接标签      -----------------
+const createElementStr = (item, ignore, isIgnore = false, findEndIndex = -1) => {
   let code = ''
   if (item.type === "root") {
     code = loop(item.children, ignore, isIgnore)
@@ -145,13 +206,19 @@ const createElementStr = (item, ignore, isIgnore = false,) => {
     const result = loop(item.children, ignore, isIgnore)
     const TagName = item.tagName
     const properties = getProperties(item.properties || {})
-    if (TagName && TagName === "code") {
-      code += `<${TagName} ${properties} children={\`${result}\`} />`
+    // 这个位置需要判断内容 判断是否是一个 pre 标签 ，子集是 code ，并且是 jsx 或 tsx 语言的需要替换成其他组件进行渲染效果
+    if (findEndIndex > 0) {
+      const { head, desc } = getPreMapStr(findEndIndex)
+      code += `<Code ${properties} desc={<React.Fragment>${desc}</React.Fragment>} head={<React.Fragment>${head}</React.Fragment>} >${result}</Code>`
+
     } else {
       code += `<${TagName} ${properties}>${result}</${TagName}>`
+
     }
+
+
   } else if (item.type === "text") {
-    code += `${item.value}`
+    code += `${transformSymbol(item.value)}`
   }
   return code
 }
@@ -160,16 +227,43 @@ const loop = (child, ignore = [], isIgnore) => {
   let code = ""
   child.forEach((item, index) => {
     if (isIgnore && !isShowNode(ignore, index)) {
-
+      // 这块需要记录转换后的代码，便于后面直接使用
+      const pre = createElementStr(item, ignore, false, -1)
+      if (pre !== "\n") {
+        newPreMap.set(index, pre)
+      }
     } else {
-      code += createElementStr(item, ignore, false)
+      const findEndIndex = ignore.findIndex((its) => its.end === index)
+      code += createElementStr(item, ignore, false, isIgnore ? findEndIndex : -1)
     }
   })
   return code
 }
+
 const result = createElementStr(hastNode, newIgnore, true)
-// console.log("hastNode", hastNode)
-console.log("child", result)
+// console.log("hastNode", )
+
+fs.writeFileSync("/Users/lusun/Carefree/md-code-preview/examples/src/da4.jsx", `
+import React from "react";
+import "./markdown.less"
+
+const Code = (props)=>{
+
+  console.log(props)
+
+  return <div>
+  {props.children}
+  </div>
+}
+
+export default () => {
+  return (<div className="wmde-markdown wmde-markdown-color">
+    ${result}
+    </div>)
+}
+`, { encoding: "utf-8" })
+
+// console.log("child", result)
 
 
 

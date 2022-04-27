@@ -39,13 +39,15 @@
     "style-to-object": "^0.3.0",
     "react-markdown": "^8.0.3",
     "react": "^18.0.0",
-    "react-dom": "^18.0.0"
+    "react-dom": "^18.0.0",
+    "refractor": "^4.6.0"
   },
   "type": "module",
   "scripts": {
     "start": "nodemon --inspect ./src/index.js",
     "start2": "nodemon --inspect ./src/imports.js",
-    "start3": "nodemon --inspect ./src/importscopy.js"
+    "start3": "nodemon --inspect ./src/importscopy.js",
+    "ast": "nodemon --inspect ./src/ast.js"
   },
   "dependencies": {
     "@uiw/copy-to-clipboard": "^1.0.12"
