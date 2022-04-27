@@ -15,6 +15,15 @@ import rehypeAttrs from 'rehype-attr';
 import rehypePrism from 'rehype-prism-plus';
 import { transform } from "@babel/standalone";
 
+/**
+ * 名称问题  使用对应的最终所属行号进行后缀命名
+ * 
+ * 1. 把 copyNode 代码放入一个文件中  例如：copyNode2
+ * 2. 把 code 代码放入一个文件中   例如：code2
+ * 3. 把 head和desc 放入一个文件中   例如：headAndDesc2
+ * 
+ * **/
+
 function babelTransform2(input, filename) {
   return transform(input, {
     filename,
@@ -119,6 +128,7 @@ const getIgnore = (child) => {
         ignoreRows.push({
           start,
           end,
+          line,
         });
       }
       filesValue[line] = {
@@ -141,6 +151,7 @@ const stepTwo = (ignoreRows, child) => {
     return {
       start: findIndexStart,
       end: findIndexEnd,
+      line: item.line
     }
   })
 }
@@ -211,7 +222,7 @@ const transformSymbol = (str) => {
 const newPreMap = new Map([])
 
 const getPreMapStr = (findEndIndex) => {
-  const { start, end } = newIgnore[findEndIndex]
+  const { start, end, line } = newIgnore[findEndIndex]
   const head = newPreMap.get(start)
   let desc = ``
   let i = start
@@ -221,7 +232,8 @@ const getPreMapStr = (findEndIndex) => {
   }
   return {
     head,
-    desc
+    desc,
+    line
   }
 }
 
@@ -236,9 +248,9 @@ const createElementStr = (item, ignore, isIgnore = false, findEndIndex = -1) => 
     const properties = getProperties(item.properties || {})
     // 这个位置需要判断内容 判断是否是一个 pre 标签 ，子集是 code ，并且是 jsx 或 tsx 语言的需要替换成其他组件进行渲染效果
     if (findEndIndex >= 0) {
-      const { head, desc } = getPreMapStr(findEndIndex)
+      const { head, desc, line: lines } = getPreMapStr(findEndIndex)
       const line = item.position.start.line
-      console.log(line)
+
       code += `<Code 
       ${properties}
        copyNode={\`${Ignore.filesValue[line].value || ""}\`} 
@@ -282,6 +294,7 @@ const getBaseCodeStr = (filesValue) => {
   })
   return codeStr
 }
+console.log(hastNode)
 
 
 fs.writeFileSync("/Users/lusun/Carefree/md-code-preview/examples/src/da4.jsx", `
