@@ -13,6 +13,36 @@ import headings from 'rehype-autolink-headings';
 import rehypeRaw from 'rehype-raw';
 import rehypeAttrs from 'rehype-attr';
 import rehypePrism from 'rehype-prism-plus';
+import { transform } from "@babel/standalone";
+
+function babelTransform2(input, filename) {
+  return transform(input, {
+    filename,
+    presets: ["env", "es2015", "react", "typescript"],
+  });
+}
+
+const getTransformValue2 = (str, filename, line) => {
+  const isReact = /import React.+from "react"/.test(str);
+  // 先判断 是否引入 react
+  const tran = isReact ? str : `import React from "react"\n ${str}`;
+  const code = `${babelTransform2(tran, `${filename}`).code}`
+    .replace(
+      `Object.defineProperty(exports, \"__esModule\", {\n  value: true\n});`,
+      ""
+    )
+    .replace(`exports["default"] = void 0;`, "")
+    .replace(
+      `exports["default"] = _default;`,
+      `return _react["default"].createElement(_default)`
+    );
+
+  return `function Base${line}(){
+    ${code}
+  }`;
+};
+
+
 
 NodeMonkey()
 
@@ -94,7 +124,7 @@ const getIgnore = (child) => {
       filesValue[line] = {
         ...item,
         // babel 转换后的 代码，最后需要拼接到结果文件中去的
-        transform: "转换的代码",
+        transform: getTransformValue2(item.value, `${index}.${item.lang}`, line),
       }
     }
   });
@@ -193,9 +223,7 @@ const getPreMapStr = (findEndIndex) => {
     head,
     desc
   }
-
 }
-
 
 // ---------------   拼接标签      -----------------
 const createElementStr = (item, ignore, isIgnore = false, findEndIndex = -1) => {
@@ -207,16 +235,20 @@ const createElementStr = (item, ignore, isIgnore = false, findEndIndex = -1) => 
     const TagName = item.tagName
     const properties = getProperties(item.properties || {})
     // 这个位置需要判断内容 判断是否是一个 pre 标签 ，子集是 code ，并且是 jsx 或 tsx 语言的需要替换成其他组件进行渲染效果
-    if (findEndIndex > 0) {
+    if (findEndIndex >= 0) {
       const { head, desc } = getPreMapStr(findEndIndex)
-      code += `<Code ${properties} desc={<React.Fragment>${desc}</React.Fragment>} head={<React.Fragment>${head}</React.Fragment>} >${result}</Code>`
-
+      const line = item.position.start.line
+      console.log(line)
+      code += `<Code 
+      ${properties}
+       copyNode={\`${Ignore.filesValue[line].value || ""}\`} 
+       desc={<React.Fragment>${desc}</React.Fragment>}
+       head={<React.Fragment>${head}</React.Fragment>}
+       code={<React.Fragment>${result}</React.Fragment>}
+      >{Base${line}()}</Code>`
     } else {
       code += `<${TagName} ${properties}>${result}</${TagName}>`
-
     }
-
-
   } else if (item.type === "text") {
     code += `${transformSymbol(item.value)}`
   }
@@ -243,9 +275,20 @@ const loop = (child, ignore = [], isIgnore) => {
 const result = createElementStr(hastNode, newIgnore, true)
 // console.log("hastNode", )
 
+const getBaseCodeStr = (filesValue) => {
+  let codeStr = ''
+  Object.entries(filesValue).forEach(([key, item]) => {
+    codeStr += `${item.transform}\n`
+  })
+  return codeStr
+}
+
+
 fs.writeFileSync("/Users/lusun/Carefree/md-code-preview/examples/src/da4.jsx", `
 import React from "react";
 import "./markdown.less"
+
+${getBaseCodeStr(Ignore.filesValue)}
 
 const Code = (props)=>{
 
@@ -262,57 +305,3 @@ export default () => {
     </div>)
 }
 `, { encoding: "utf-8" })
-
-// console.log("child", result)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// const loops = (child) => {
-//   let code = ''
-//   child.forEach((item) => {
-//     if (typeof item === "string") {
-//       code += item
-//     } else {
-//       code += getLoops(item)
-//     }
-//   })
-//   return code
-// }
-
-
-// const getLoops = (item) => {
-//   let code = ""
-//   const tagName = typeof item.type === "symbol" ? "React.Fragment" : item.type
-//   const { children, ...rest } = item.props || {}
-//   const childs = loops(children || [])
-//   const lg = Object.keys(rest).length
-//   if (lg && typeof tagName === "string") {
-//     code += `<${tagName} {...${JSON.stringify(rest)}} >${childs}</${tagName}>`
-//   } else if (typeof tagName === "string") {
-//     code += `<${tagName}>${childs}</${tagName}>`
-//   } else if (typeof tagName === "function") {
-//     code += tagName(item.props || {})
-//   }
-//   return code
-// }
-
-
